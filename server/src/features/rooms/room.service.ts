@@ -1,6 +1,36 @@
 import Boom from '@hapi/boom';
 import { pool } from '../../config/database';
-import { Message, MessageWithCreator, Room, Creator, RoomWithCreator } from './room.types';
+import { supabase } from '../../config/supabase';
+import {
+  Message,
+  MessageWithCreator,
+  Room,
+  Creator,
+  RoomWithCreator,
+} from './room.types';
+
+const broadcastMessage = async (
+  roomId: string,
+  message: MessageWithCreator
+) => {
+  const channel = supabase.channel(`room:${roomId}`);
+  await channel.send({
+    type: 'broadcast',
+    event: 'new-message',
+    payload: message,
+  });
+  supabase.removeChannel(channel);
+};
+
+const broadcastRoomDeleted = async (roomId: string) => {
+  const channel = supabase.channel(`room:${roomId}`);
+  await channel.send({
+    type: 'broadcast',
+    event: 'room-deleted',
+    payload: {},
+  });
+  supabase.removeChannel(channel);
+};
 
 const getCreator = async (userId: string): Promise<Creator> => {
   const result = await pool.query<{
@@ -98,6 +128,7 @@ export const deleteRoomService = async (
   }
 
   await pool.query('DELETE FROM public.rooms WHERE id = $1', [roomId]);
+  broadcastRoomDeleted(roomId);
 };
 
 export const createMessageService = async (
@@ -115,13 +146,17 @@ export const createMessageService = async (
   const creator = await getCreator(userId);
   const message = result.rows[0];
 
-  return {
+  const messageCreated: MessageWithCreator = {
     id: message.id,
     content: message.content,
     room_id: message.room_id,
     created_at: message.created_at,
     created_by: creator,
   };
+
+  broadcastMessage(roomId, messageCreated);
+
+  return messageCreated;
 };
 
 export const getMessagesService = async (
