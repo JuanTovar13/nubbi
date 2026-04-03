@@ -4,6 +4,7 @@ import { AxiosProvider } from "./providers/AxiosProvider";
 import { ToastProvider } from "./providers/ToastProvider";
 import { RoomsProvider } from "./providers/RoomsProvider";
 import { ChatProvider } from "./providers/ChatProvider";
+import { PrivateRoute } from "./components/PrivateRoute/PrivateRoute";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { RoomsPage } from "./pages/RoomsPage";
@@ -16,34 +17,30 @@ const AppRoutes = () => {
     <Routes>
       <Route
         path="/login"
-        element={!auth ? <LoginPage /> : <Navigate to="/rooms" />}
+        element={auth ? <Navigate to="/rooms" /> : <LoginPage />}
       />
       <Route
         path="/register"
-        element={!auth ? <RegisterPage /> : <Navigate to="/rooms" />}
+        element={auth ? <Navigate to="/rooms" /> : <RegisterPage />}
       />
       <Route
         path="/rooms"
         element={
-          auth ? (
+          <PrivateRoute isAuth={Boolean(auth)} redirectTo="/login">
             <RoomsProvider>
               <RoomsPage />
             </RoomsProvider>
-          ) : (
-            <Navigate to="/login" />
-          )
+          </PrivateRoute>
         }
       />
       <Route
         path="/rooms/:id"
         element={
-          auth ? (
+          <PrivateRoute isAuth={Boolean(auth)} redirectTo="/login">
             <ChatProvider>
               <ChatPage />
             </ChatProvider>
-          ) : (
-            <Navigate to="/login" />
-          )
+          </PrivateRoute>
         }
       />
       <Route path="*" element={<Navigate to={auth ? "/rooms" : "/login"} />} />
@@ -54,13 +51,13 @@ const AppRoutes = () => {
 export const App = () => {
   return (
     <BrowserRouter>
-      <UserProvider>
-        <AxiosProvider>
-          <ToastProvider>
+      <AxiosProvider>
+        <ToastProvider>
+          <UserProvider>
             <AppRoutes />
-          </ToastProvider>
-        </AxiosProvider>
-      </UserProvider>
+          </UserProvider>
+        </ToastProvider>
+      </AxiosProvider>
     </BrowserRouter>
   );
 };

@@ -1,4 +1,6 @@
+import { useState } from "preact/hooks";
 import { useNavigate } from "react-router-dom";
+
 import { useUser } from "../providers/UserProvider";
 import { useRooms } from "../providers/RoomsProvider";
 import { RoomForm } from "../components/RoomForm/RoomForm";
@@ -6,27 +8,20 @@ import { RoomList } from "../components/RoomList/RoomList";
 import type { Room } from "../types";
 
 export const RoomsPage = () => {
-  const { auth, setAuth } = useUser();
+  const { auth, logout } = useUser();
   const navigate = useNavigate();
-  const {
-    rooms,
-    loading,
-    creating,
-    deleting,
-    newRoomName,
-    setNewRoomName,
-    createRoom,
-    deleteRoom,
-  } = useRooms();
+  const { rooms, loading, creating, deleting, createRoom, deleteRoom } =
+    useRooms();
+  const [newRoomName, setNewRoomName] = useState("");
 
-  const handleCreateRoom = () => {
+  const handleCreateRoom = async () => {
     if (!newRoomName.trim()) return;
-    createRoom(newRoomName.trim());
+    const success = await createRoom(newRoomName.trim());
+    if (success) setNewRoomName("");
   };
 
   const handleLogout = () => {
-    setAuth(null);
-    navigate("/login");
+    logout();
   };
 
   const isOwner = (room: Room) => room.created_by.email === auth?.user.email;

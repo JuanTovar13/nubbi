@@ -2,7 +2,7 @@ import axios from "axios";
 import { createContext } from "preact";
 import { useContext, useMemo } from "preact/hooks";
 import type { ComponentChildren } from "preact";
-import type { AxiosInstance } from "axios";
+import type { AxiosInstance, InternalAxiosRequestConfig } from "axios";
 import type { AuthData } from "../types";
 import {
   getStoredAuth,
@@ -14,58 +14,67 @@ const AxiosContext = createContext<AxiosInstance | null>(null);
 
 let refreshPromise: Promise<AuthData> | null = null;
 
-const refreshSession = async (
+const isTokenExpired = (expiresAt: number): boolean =>
+  Date.now() >= (expiresAt - 30) * 1000;
+
+const getAccessToken = async (baseURL: string): Promise<string | null> => {
+  const auth = getStoredAuth();
+  if (!auth) return null;
+
+  const { session } = auth;
+
+  if (!session.expires_at || !isTokenExpired(session.expires_at)) {
+    return session.access_token;
+  }
+
+  try {
+    refreshPromise ??= axios
+      .post<AuthData>(`${baseURL}/api/auth/refresh`, {
+        refreshToken: session.refresh_token,
+      })
+      .then(({ data }) => {
+        setStoredAuth(data);
+        return data;
+      });
+
+    const newAuth = await refreshPromise;
+    return newAuth.session.access_token;
+  } catch {
+    removeStoredAuth();
+    globalThis.location.href = "/login";
+    throw new Error("Session expired");
+  } finally {
+    refreshPromise = null;
+  }
+};
+
+const attachAuth = async (
   baseURL: string,
-  refreshToken: string,
-): Promise<AuthData> => {
-  const { data } = await axios.post<AuthData>(`${baseURL}/api/auth/refresh`, {
-    refreshToken,
-  });
-  setStoredAuth(data);
-  return data;
+  config: InternalAxiosRequestConfig,
+): Promise<InternalAxiosRequestConfig> => {
+  const token = await getAccessToken(baseURL);
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
 };
 
-const isTokenExpired = (expiresAt: number): boolean => {
-  return Date.now() >= (expiresAt - 30) * 1000;
+const extractErrorMessage = (error: unknown): never => {
+  const message: string =
+    (error as { response?: { data?: { message?: string } } }).response?.data
+      ?.message ?? "Ocurrió un error inesperado";
+  return Promise.reject(new Error(message)) as never;
 };
 
-export const AxiosProvider = ({ children }: { children: ComponentChildren }) => {
+export const AxiosProvider = ({
+  children,
+}: {
+  children: ComponentChildren;
+}) => {
   const instance = useMemo(() => {
     const baseURL = import.meta.env.VITE_API_URL || "";
     const inst = axios.create({ baseURL });
 
-    inst.interceptors.request.use(async (config) => {
-      const auth = getStoredAuth();
-      if (!auth) return config;
-
-      if (auth.session.expires_at && isTokenExpired(auth.session.expires_at)) {
-        if (!refreshPromise) {
-          refreshPromise = refreshSession(baseURL, auth.session.refresh_token);
-        }
-
-        try {
-          const newAuth = await refreshPromise;
-          config.headers.Authorization = `Bearer ${newAuth.session.access_token}`;
-        } catch {
-          removeStoredAuth();
-          globalThis.location.href = "/login";
-          throw new Error("Session expired");
-        }
-      } else {
-        config.headers.Authorization = `Bearer ${auth.session.access_token}`;
-      }
-
-      return config;
-    });
-
-    inst.interceptors.response.use(
-      (response) => response,
-      (error) => {
-        const message: string =
-          error.response?.data?.message ?? "Ocurrió un error inesperado";
-        return Promise.reject(new Error(message));
-      },
-    );
+    inst.interceptors.request.use((config) => attachAuth(baseURL, config));
+    inst.interceptors.response.use((response) => response, extractErrorMessage);
 
     return inst;
   }, []);
@@ -73,10 +82,10 @@ export const AxiosProvider = ({ children }: { children: ComponentChildren }) => 
   return (
     <AxiosContext.Provider value={instance}>{children}</AxiosContext.Provider>
   );
-}
+};
 
 export const useAxios = () => {
   const ctx = useContext(AxiosContext);
   if (!ctx) throw new Error("useAxios must be used within AxiosProvider");
   return ctx;
-}
+};

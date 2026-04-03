@@ -1,59 +1,22 @@
 import Boom from '@hapi/boom';
 import { pool } from '../../config/database';
 import { supabase } from '../../config/supabase';
-import {
-  Room,
-  RoomWithCreator,
-} from './room.types';
-import { getCreator } from '../../shared/utils/getCreator';
+import { Room, RoomWithCreator } from './room.types';
 
 const broadcastRoomCreated = async (room: RoomWithCreator) => {
   const channel = supabase.channel('rooms');
-  await channel.send({
-    type: 'broadcast',
-    event: 'room-created',
-    payload: room,
-  });
+  await channel.httpSend('room-created', room);
   supabase.removeChannel(channel);
 };
 
 const broadcastRoomDeleted = async (roomId: string) => {
   const channel = supabase.channel(`room:${roomId}`);
-  await channel.send({
-    type: 'broadcast',
-    event: 'room-deleted',
-    payload: {},
-  });
+  await channel.httpSend('room-deleted', {});
   supabase.removeChannel(channel);
 
   const globalChannel = supabase.channel('rooms');
-  await globalChannel.send({
-    type: 'broadcast',
-    event: 'room-deleted',
-    payload: { roomId },
-  });
+  await globalChannel.httpSend('room-deleted', { roomId });
   supabase.removeChannel(globalChannel);
-};
-
-const toRoomWithCreator = async (room: Room): Promise<RoomWithCreator> => {
-  const creator = await getCreator(room.created_by);
-  return {
-    id: room.id,
-    name: room.name,
-    created_at: room.created_at,
-    created_by: creator,
-  };
-};
-
-export const getRoomByName = async (
-  name: string
-): Promise<RoomWithCreator | null> => {
-  const result = await pool.query<Room>(
-    'SELECT id, name, created_by, created_at FROM public.rooms WHERE name = $1',
-    [name]
-  );
-  if (result.rows.length === 0) return null;
-  return toRoomWithCreator(result.rows[0]);
 };
 
 const getRawRoomById = async (roomId: string): Promise<Room> => {
@@ -70,8 +33,23 @@ const getRawRoomById = async (roomId: string): Promise<Room> => {
 };
 
 export const getRoomById = async (roomId: string): Promise<RoomWithCreator> => {
-  const room = await getRawRoomById(roomId);
-  return toRoomWithCreator(room);
+  const result = await pool.query<RoomWithCreator>(
+    `SELECT r.id, r.name, r.created_at,
+      json_build_object(
+        'userName', COALESCE(u.raw_user_meta_data->>'userName', ''),
+        'email', u.email
+      ) AS created_by
+    FROM public.rooms r
+    JOIN auth.users u ON u.id = r.created_by
+    WHERE r.id = $1`,
+    [roomId]
+  );
+
+  if (result.rows.length === 0) {
+    throw Boom.notFound('Room not found');
+  }
+
+  return result.rows[0];
 };
 
 export const getRoomsService = async (): Promise<RoomWithCreator[]> => {
@@ -92,17 +70,23 @@ export const createRoomService = async (
   name: string,
   userId: string
 ): Promise<RoomWithCreator> => {
-  const existing = await getRoomByName(name);
-  if (existing) {
-    throw Boom.conflict('A room with that name already exists');
-  }
-
-  const result = await pool.query<{ id: string }>(
-    'INSERT INTO public.rooms (name, created_by) VALUES ($1, $2) RETURNING id',
+  const result = await pool.query<RoomWithCreator>(
+    `WITH inserted AS (
+      INSERT INTO public.rooms (name, created_by)
+      VALUES ($1, $2)
+      RETURNING id, name, created_by, created_at
+    )
+    SELECT i.id, i.name, i.created_at,
+      json_build_object(
+        'userName', COALESCE(u.raw_user_meta_data->>'userName', ''),
+        'email', u.email
+      ) AS created_by
+    FROM inserted i
+    JOIN auth.users u ON u.id = i.created_by`,
     [name, userId]
   );
 
-  const room = await getRoomById(result.rows[0].id);
+  const room = result.rows[0];
   broadcastRoomCreated(room);
   return room;
 };
@@ -120,4 +104,3 @@ export const deleteRoomService = async (
   await pool.query('DELETE FROM public.rooms WHERE id = $1', [roomId]);
   broadcastRoomDeleted(roomId);
 };
-

@@ -13,7 +13,7 @@ export const initDb = async () => {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS public.rooms (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      name TEXT NOT NULL,
+      name TEXT NOT NULL UNIQUE,
       created_by UUID NOT NULL REFERENCES auth.users(id),
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );

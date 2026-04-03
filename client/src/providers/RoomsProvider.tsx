@@ -11,9 +11,7 @@ interface RoomsContextType {
   loading: boolean;
   creating: boolean;
   deleting: string | null;
-  newRoomName: string;
-  setNewRoomName: (name: string) => void;
-  createRoom: (name: string) => Promise<void>;
+  createRoom: (name: string) => Promise<boolean>;
   deleteRoom: (roomId: string) => Promise<void>;
 }
 
@@ -22,9 +20,7 @@ const RoomsContext = createContext<RoomsContextType>({
   loading: true,
   creating: false,
   deleting: null,
-  newRoomName: "",
-  setNewRoomName: () => {},
-  createRoom: async () => {},
+  createRoom: async () => false,
   deleteRoom: async () => {},
 });
 
@@ -38,7 +34,6 @@ export const RoomsProvider = ({ children }: RoomsProviderProps) => {
   const supabase = useSupabase();
 
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [newRoomName, setNewRoomName] = useState("");
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -86,18 +81,22 @@ export const RoomsProvider = ({ children }: RoomsProviderProps) => {
     };
   }, []);
 
-  const createRoom = async (name: string) => {
+  const createRoom = async (name: string): Promise<boolean> => {
     setCreating(true);
     try {
       const { data } = await axios.post<Room>("/api/rooms", { name });
-      setRooms((prev) => [data, ...prev]);
-      setNewRoomName("");
+      setRooms((prev) => {
+        if (prev.some((r) => r.id === data.id)) return prev;
+        return [data, ...prev];
+      });
       showToast("Room creado", "success");
+      return true;
     } catch (err) {
       showToast(
         err instanceof Error ? err.message : "Error al crear room",
         "error",
       );
+      return false;
     } finally {
       setCreating(false);
     }
@@ -126,8 +125,6 @@ export const RoomsProvider = ({ children }: RoomsProviderProps) => {
         loading,
         creating,
         deleting,
-        newRoomName,
-        setNewRoomName,
         createRoom,
         deleteRoom,
       }}

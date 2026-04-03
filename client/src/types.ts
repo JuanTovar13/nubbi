@@ -1,8 +1,8 @@
-export type { User, Session } from '@supabase/supabase-js';
+import type { User, Session } from "@supabase/supabase-js";
 
 export interface AuthData {
-  user: import('@supabase/supabase-js').User;
-  session: import('@supabase/supabase-js').Session;
+  user: User;
+  session: Session;
 }
 
 export interface Creator {
