@@ -40,31 +40,18 @@ export const ChatProvider = ({ children }: ChatProviderProps) => {
   const [sending, setSending] = useState<boolean>(false);
   const [room, setRoom] = useState<Room | null>(null);
 
-  const fetchRoom = async () => {
+  const fetchData = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const { data } = await axios.get<Room>(`/api/rooms/${roomId}`);
-      setRoom(data);
+      const [roomRes, messagesRes] = await Promise.all([
+        axios.get<Room>(`/api/rooms/${roomId}`),
+        axios.get<Message[]>(`/api/rooms/${roomId}/messages`),
+      ]);
+      setRoom(roomRes.data);
+      setMessages(messagesRes.data);
     } catch (err) {
       showToast(
-        err instanceof Error ? err.message : "Error al cargar room",
-        "error",
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchMessages = async () => {
-    try {
-      setLoading(true);
-      const { data } = await axios.get<Message[]>(
-        `/api/rooms/${roomId}/messages`,
-      );
-      setMessages(data);
-    } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Error al cargar mensajes",
+        err instanceof Error ? err.message : "Error al cargar chat",
         "error",
       );
     } finally {
@@ -117,8 +104,7 @@ export const ChatProvider = ({ children }: ChatProviderProps) => {
   };
 
   useEffect(() => {
-    fetchRoom();
-    fetchMessages();
+    fetchData();
     const unsubscribe = subscribeToMessages();
     return () => {
       unsubscribe();
