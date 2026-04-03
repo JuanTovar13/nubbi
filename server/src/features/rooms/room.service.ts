@@ -3,9 +3,9 @@ import { pool } from '../../config/database';
 import { supabase } from '../../config/supabase';
 import {
   Room,
-  Creator,
   RoomWithCreator,
 } from './room.types';
+import { getCreator } from '../../shared/utils/getCreator';
 
 const broadcastRoomCreated = async (room: RoomWithCreator) => {
   const channel = supabase.channel('rooms');
@@ -33,21 +33,6 @@ const broadcastRoomDeleted = async (roomId: string) => {
     payload: { roomId },
   });
   supabase.removeChannel(globalChannel);
-};
-
-const getCreator = async (userId: string): Promise<Creator> => {
-  const result = await pool.query<{
-    email: string;
-    raw_user_meta_data: { userName?: string };
-  }>('SELECT email, raw_user_meta_data FROM auth.users WHERE id = $1', [
-    userId,
-  ]);
-
-  const user = result.rows[0];
-  return {
-    userName: user.raw_user_meta_data?.userName ?? '',
-    email: user.email,
-  };
 };
 
 const toRoomWithCreator = async (room: Room): Promise<RoomWithCreator> => {

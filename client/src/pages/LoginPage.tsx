@@ -6,15 +6,8 @@ import { useToast } from '../providers/ToastProvider';
 import { AuthForm } from '../components/AuthForm/AuthForm';
 import { AuthInput } from '../components/AuthInput/AuthInput';
 import { SubmitButton } from '../components/SubmitButton/SubmitButton';
+import { Icon } from '../components/Icon/Icon';
 import type { AuthData } from '../types';
-
-const ChatIcon = () => {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-    </svg>
-  );
-}
 
 export const LoginPage = () => {
   const { setAuth } = useUser();
@@ -42,7 +35,7 @@ export const LoginPage = () => {
 
   return (
     <AuthForm
-      icon={<ChatIcon />}
+      icon={<Icon name="chat" />}
       title="Bienvenido"
       subtitle="Inicia sesion para continuar"
       footer={

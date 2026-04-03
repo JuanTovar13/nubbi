@@ -2,22 +2,7 @@ import { pool } from '../../config/database';
 import { supabase } from '../../config/supabase';
 import { getRoomById } from '../rooms/room.service';
 import { Message, MessageWithCreator } from './message.types';
-import { Creator } from '../../shared/types/creator';
-
-const getCreator = async (userId: string): Promise<Creator> => {
-  const result = await pool.query<{
-    email: string;
-    raw_user_meta_data: { userName?: string };
-  }>('SELECT email, raw_user_meta_data FROM auth.users WHERE id = $1', [
-    userId,
-  ]);
-
-  const user = result.rows[0];
-  return {
-    userName: user.raw_user_meta_data?.userName ?? '',
-    email: user.email,
-  };
-};
+import { getCreator } from '../../shared/utils/getCreator';
 
 const broadcastMessage = async (
   roomId: string,
