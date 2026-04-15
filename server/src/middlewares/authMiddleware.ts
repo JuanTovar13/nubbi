@@ -1,41 +1,34 @@
-import { Request, Response, NextFunction } from 'express';
-import Boom from '@hapi/boom';
-import { supabase } from '../config/supabase';
-import { AuthUser } from '@supabase/supabase-js';
-
-interface AuthenticatedRequest extends Request {
-  user?: AuthUser;
+import { Request, Response, NextFunction } from "express";
+import { supabase } from "../config/supabase";
+export interface AuthRequest extends Request {
+  user?: {
+    id: string;
+    email: string;
+    role: "familia" | "gestor";
+  };
 }
 
-export const getUserFromRequest = (req: AuthenticatedRequest): AuthUser => {
-  if (req.user) {
-    return req.user;
+export const authMiddleware = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+
+    if (!token) {
+      return res.status(401).json({ error: "No autorizado" });
+    }
+
+    const { data, error } = await supabase.auth.getUser(token);
+
+    if (error || !data.user) {
+      return res.status(401).json({ error: "Token inválido" });
+    }
+
+    req.user = {
+      id: data.user.id,
+      email: data.user.email,
+    };
+
+    next();
+  } catch (err) {
+    res.status(401).json({ error: "Error de autenticación" });
   }
-
-  throw Boom.unauthorized('User not authenticated');
-};
-
-export const authMiddleware = async (
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction
-) => {
-  if (!req.headers.authorization) {
-    throw Boom.unauthorized('Authorization header is missing');
-  }
-
-  const token = req.headers.authorization.split(' ')[1];
-
-  if (!token) {
-    throw Boom.unauthorized('Token is missing');
-  }
-
-  const userResponse = await supabase.auth.getUser(token);
-
-  if (userResponse.error) {
-    throw Boom.unauthorized(userResponse.error.message);
-  }
-
-  req.user = userResponse.data.user;
-  next();
 };

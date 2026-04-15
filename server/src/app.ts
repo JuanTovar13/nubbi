@@ -3,8 +3,6 @@ import { NODE_ENV, PORT } from './config';
 import cors from 'cors';
 import { errorsMiddleware } from './middlewares/errorsMiddleware';
 import { router as authRouter } from './features/auth/auth.router';
-import { router as roomsRouter } from './features/rooms/room.router';
-import { router as messagesRouter } from './features/messages/message.router';
 import { initDb } from './config/database';
 
 const app = express();
@@ -17,8 +15,6 @@ app.get('/', (req, res) => {
 
 // Routes
 app.use('/api/auth', authRouter);
-app.use('/api/rooms', roomsRouter);
-app.use('/api/rooms/:roomId/messages', messagesRouter);
 
 // Error handling middleware
 app.use(errorsMiddleware);
