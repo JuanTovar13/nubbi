@@ -1,95 +1,100 @@
 import { supabase } from "../../config/supabase";
 import { RegisterDTO, LoginDTO, AuthResponse } from "./auth.types";
+import Boom from "@hapi/boom";
 
-export class AuthService {
-  
-  static async register(data: RegisterDTO): Promise<AuthResponse> {
-    const { email, password, full_name, role = "familia" } = data;
+export const registerUserService = async (
+  data: RegisterDTO
+): Promise<AuthResponse> => {
+  const { email, password, full_name, role = "familia" } = data;
 
-    // 1. Crear usuario en Supabase Auth
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-    });
+  const { data: authData, error: authError } = await supabase.auth.signUp({
+    email,
+    password,
+  });
 
-    if (authError) {
-      throw new Error(authError.message);
-    }
+  if (authError) {
+    throw Boom.badRequest(authError.message);
+  }
 
-    const userId = authData.user?.id;
-    if (!userId) throw new Error("Error creando usuario");
+  const userId = authData.user?.id;
+  if (!userId) {
+    throw Boom.internal("Error creando usuario");
+  }
 
-    // 2. Crear profile
-    const { error: profileError } = await supabase.from("profiles").insert({
+  const { error: profileError } = await supabase.from("profiles").insert({
+    id: userId,
+    email,
+    full_name,
+    role,
+  });
+
+  if (profileError) {
+    throw Boom.internal(profileError.message);
+  }
+
+  return {
+    access_token: authData.session?.access_token || "",
+    refresh_token: authData.session?.refresh_token || "",
+    user: {
       id: userId,
       email,
-      full_name,
       role,
-    });
+      full_name,
+    },
+  };
+};
 
-    if (profileError) {
-      throw new Error(profileError.message);
-    }
+export const loginUserService = async (
+  data: LoginDTO
+): Promise<AuthResponse> => {
+  const { email, password } = data;
 
-    return {
-      access_token: authData.session?.access_token || "",
-      refresh_token: authData.session?.refresh_token || "",
-      user: {
-        id: userId,
-        email,
-        role,
-        full_name,
-      },
-    };
+  const { data: authData, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+
+  if (error) {
+    throw Boom.unauthorized(error.message || "Credenciales inválidas");
   }
 
-  static async login(data: LoginDTO): Promise<AuthResponse> {
-    const { email, password } = data;
-
-    const { data: authData, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      throw new Error("Credenciales inválidas");
-    }
-
-    const user = authData.user;
-    if (!user) throw new Error("Usuario no encontrado");
-
-    // Obtener perfil
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError) {
-      throw new Error("Perfil no encontrado");
-    }
-
-    return {
-      access_token: authData.session.access_token,
-      refresh_token: authData.session.refresh_token,
-      user: {
-        id: user.id,
-        email: user.email!,
-        role: profile.role,
-        full_name: profile.full_name,
-      },
-    };
+  const user = authData.user;
+  if (!user) {
+    throw Boom.unauthorized("Usuario no encontrado");
   }
 
-  static async getProfile(userId: string) {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .single();
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .single();
 
-    if (error) throw new Error("No se pudo obtener el perfil");
-
-    return data;
+  if (profileError) {
+    throw Boom.notFound(profileError.message || "Perfil no encontrado");
   }
-}
+
+  return {
+    access_token: authData.session?.access_token || "",
+    refresh_token: authData.session?.refresh_token || "",
+    user: {
+      id: user.id,
+      email: user.email || email,
+      role: profile.role,
+      full_name: profile.full_name,
+    },
+  };
+};
+
+export const getProfileService = async (userId: string) => {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", userId)
+    .single();
+
+  if (error) {
+    throw Boom.notFound("No se pudo obtener el perfil");
+  }
+
+  return data;
+};

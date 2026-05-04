@@ -1,42 +1,56 @@
 import { Response } from "express";
+import Boom from "@hapi/boom";
 import { AuthRequest } from "../../middlewares/authMiddleware";
-import { AsistenciasService } from "./asistencias.service";
+import {
+  getBalanceService,
+  getHistorialService,
+  scanQRService,
+} from "./asistencias.service";
 
 const getErrorMessage = (error: unknown, defaultMessage: string) => {
   if (error instanceof Error) return error.message;
   return defaultMessage;
 };
 
-const CLIENT_ERROR_PATTERNS = ["inválido", "no encontrada", "activa", "Ya registraste"];
+const getStatusCode = (error: unknown, defaultStatus: number) => {
+  if (Boom.isBoom(error)) {
+    return error.output.statusCode;
+  }
+  return defaultStatus;
+};
 
 export class AsistenciasController {
 
   static async scan(req: AuthRequest, res: Response) {
     try {
-      const result = await AsistenciasService.scanQR(req.body, req.user!.id);
+      const result = await scanQRService(req.body, req.user!.id);
       res.status(201).json(result);
     } catch (error) {
-      const msg = getErrorMessage(error, "Error al registrar asistencia");
-      const isClientError = CLIENT_ERROR_PATTERNS.some((p) => msg.includes(p));
-      res.status(isClientError ? 400 : 500).json({ error: msg });
+      res
+        .status(getStatusCode(error, 400))
+        .json({ error: getErrorMessage(error, "Error al registrar asistencia") });
     }
   }
 
   static async balance(req: AuthRequest, res: Response) {
     try {
-      const total = await AsistenciasService.getBalance(req.user!.id);
+      const total = await getBalanceService(req.user!.id);
       res.status(200).json({ total });
     } catch (error) {
-      res.status(400).json({ error: getErrorMessage(error, "Error al obtener balance") });
+      res
+        .status(getStatusCode(error, 400))
+        .json({ error: getErrorMessage(error, "Error al obtener balance") });
     }
   }
 
   static async historial(req: AuthRequest, res: Response) {
     try {
-      const asistencias = await AsistenciasService.getHistorial(req.user!.id);
+      const asistencias = await getHistorialService(req.user!.id);
       res.status(200).json(asistencias);
     } catch (error) {
-      res.status(400).json({ error: getErrorMessage(error, "Error al obtener historial") });
+      res
+        .status(getStatusCode(error, 400))
+        .json({ error: getErrorMessage(error, "Error al obtener historial") });
     }
   }
 }
