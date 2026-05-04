@@ -3,7 +3,7 @@ import { supabase } from "../config/supabase";
 export interface AuthRequest extends Request {
   user?: {
     id: string;
-    email: string;
+    email: string | undefined;
     role: "familia" | "gestor";
   };
 }
@@ -25,6 +25,7 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
     req.user = {
       id: data.user.id,
       email: data.user.email,
+      role: data.user.app_metadata?.role || "familia",
     };
 
     next();
